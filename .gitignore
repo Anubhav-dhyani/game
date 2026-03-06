@@ -1,4 +1,27 @@
+# Dependencies
 node_modules/
+
+# macOS junk
 .DS_Store
 ._*
+**/.DS_Store
+**/._*
+
+# Environment
 .env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+Desktop.ini
