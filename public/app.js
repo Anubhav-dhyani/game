@@ -50,7 +50,7 @@ async function loadCategories() {
     const res = await fetch('/api/categories');
     ALL_CATEGORIES = await res.json();
     // Default-select a few popular ones
-    const defaults = ['fruits', 'countries', 'animals', 'cities', 'colors'];
+    const defaults = ['fruits', 'countries', 'animals', 'cities', 'colors', 'any'];
     ALL_CATEGORIES.forEach(c => {
       if (defaults.includes(c.key)) selectedCategories.add(c.key);
     });
@@ -450,7 +450,7 @@ $('#btn-play-again').addEventListener('click', () => {
   isHost = false;
   // Reset default selections
   selectedCategories = new Set();
-  const defaults = ['fruits', 'countries', 'animals', 'cities', 'colors'];
+  const defaults = ['fruits', 'countries', 'animals', 'cities', 'colors', 'any'];
   ALL_CATEGORIES.forEach(c => {
     if (defaults.includes(c.key)) selectedCategories.add(c.key);
   });

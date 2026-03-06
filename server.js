@@ -100,7 +100,7 @@ io.on('connection', (socket) => {
   });
 
   // ── Player submits a word ─────────────────────────────────────────
-  socket.on('submit-word', ({ code, word, category }) => {
+  socket.on('submit-word', async ({ code, word, category }) => {
     const room = roomManager.getRoom(code);
     if (!room) return socket.emit('error-msg', 'Room not found.');
     if (room.state !== 'playing') return socket.emit('error-msg', 'Game not in progress.');
@@ -118,8 +118,8 @@ io.on('connection', (socket) => {
       reason = 'Empty word.';
     } else if (room.isWordUsed(trimmed)) {
       reason = `"${word}" was already used!`;
-    } else if (!wordValidator.isValid(trimmed, category)) {
-      reason = `"${word}" is not a valid ${category}.`;
+    } else if (!(await wordValidator.isValidAsync(trimmed, category))) {
+      reason = `"${word}" is not a valid ${category === 'any' ? 'English word' : category}.`;
     } else {
       valid = true;
     }
