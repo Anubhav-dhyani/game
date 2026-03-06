@@ -363,3 +363,68 @@ input[type="text"]:focus, select:focus { border-color: var(--primary); }
   .code-text { font-size: 1.4rem; }
   .category-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
 }
+
+/* ── Team setup (host) ──────────────────────────────────── */
+#team-names-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.team-name-input {
+  padding: 10px 14px;
+  border: 2px solid #333;
+  border-radius: 10px;
+  background: var(--secondary);
+  color: var(--text);
+  font-size: .95rem;
+}
+.team-name-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+/* ── Team picker (join screen) ──────────────────────────── */
+.team-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+}
+.team-pick-btn {
+  flex: 1 1 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 18px;
+  border: 2px solid #333;
+  border-radius: var(--radius);
+  background: var(--secondary);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.team-pick-btn:hover {
+  border-color: var(--primary);
+}
+.team-pick-btn.selected {
+  border-color: var(--primary);
+  background: rgba(108, 99, 255, .2);
+}
+.team-slots {
+  font-size: .8rem;
+  color: var(--text-dim);
+}
+
+/* ── Lobby team capacity badge ──────────────────────────── */
+.team-capacity {
+  font-size: .8rem;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+.empty-team {
+  font-size: .85rem;
+  color: var(--text-dim);
+  font-style: italic;
+}

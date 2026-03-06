@@ -3,7 +3,15 @@
  */
 
 class Room {
-  constructor(code, hostId, hostName, mode, teamName) {
+  /**
+   * @param {string} code
+   * @param {string} hostId
+   * @param {string} hostName
+   * @param {'solo'|'team'} mode
+   * @param {Array<{name:string, maxPlayers:number}>} [teamConfig] – team definitions (team mode only)
+   * @param {string} [hostTeam] – which team the host joins (team mode only)
+   */
+  constructor(code, hostId, hostName, mode, teamConfig, hostTeam) {
     this.code = code;
     this.hostId = hostId;
     this.mode = mode;               // 'solo' | 'team'
@@ -17,8 +25,16 @@ class Room {
     this.currentCategoryIndex = 0;
     this.usedWords = new Set();
 
+    // Team config: Map teamName → { maxPlayers, members: Set<socketId> }
+    this.teamConfig = new Map();
+    if (mode === 'team' && Array.isArray(teamConfig)) {
+      teamConfig.forEach(t => {
+        this.teamConfig.set(t.name, { maxPlayers: t.maxPlayers, members: new Set() });
+      });
+    }
+
     // Add the host as the first player
-    this.addPlayer(hostId, hostName, teamName);
+    this.addPlayer(hostId, hostName, hostTeam);
   }
 
   addPlayer(socketId, name, teamName) {
@@ -26,9 +42,18 @@ class Room {
     for (const [, p] of this.players) {
       if (p.name.toLowerCase() === name.toLowerCase()) return false;
     }
+
+    // Team mode: validate the team exists and has room
+    if (this.mode === 'team') {
+      if (!teamName || !this.teamConfig.has(teamName)) return false;
+      const team = this.teamConfig.get(teamName);
+      if (team.members.size >= team.maxPlayers) return false;
+      team.members.add(socketId);
+    }
+
     this.players.set(socketId, {
       name,
-      team: this.mode === 'team' ? (teamName || 'No Team') : null,
+      team: this.mode === 'team' ? teamName : null,
       score: 0,
       answers: []
     });
@@ -36,6 +61,10 @@ class Room {
   }
 
   removePlayer(socketId) {
+    const player = this.players.get(socketId);
+    if (player && player.team && this.teamConfig.has(player.team)) {
+      this.teamConfig.get(player.team).members.delete(socketId);
+    }
     this.players.delete(socketId);
     this.turnOrder = this.turnOrder.filter(id => id !== socketId);
     if (this.currentTurnIndex >= this.turnOrder.length) {
@@ -63,12 +92,30 @@ class Room {
   getTeams() {
     if (this.mode !== 'team') return null;
     const teams = {};
-    for (const [, p] of this.players) {
-      const t = p.team || 'No Team';
-      if (!teams[t]) teams[t] = [];
-      teams[t].push(p.name);
+    for (const [teamName, cfg] of this.teamConfig) {
+      const members = [];
+      for (const [, p] of this.players) {
+        if (p.team === teamName) members.push(p.name);
+      }
+      teams[teamName] = { members, maxPlayers: cfg.maxPlayers, count: members.length };
     }
     return teams;
+  }
+
+  /** Returns teams that still have open slots */
+  getAvailableTeams() {
+    if (this.mode !== 'team') return null;
+    const available = [];
+    for (const [teamName, cfg] of this.teamConfig) {
+      if (cfg.members.size < cfg.maxPlayers) {
+        available.push({
+          name: teamName,
+          maxPlayers: cfg.maxPlayers,
+          currentCount: cfg.members.size
+        });
+      }
+    }
+    return available;
   }
 
   startGame(categories, rounds) {
@@ -168,9 +215,9 @@ class RoomManager {
     return code;
   }
 
-  createRoom(hostId, hostName, mode, teamName) {
+  createRoom(hostId, hostName, mode, teamConfig, hostTeam) {
     const code = this._generateCode();
-    const room = new Room(code, hostId, hostName, mode || 'solo', teamName);
+    const room = new Room(code, hostId, hostName, mode || 'solo', teamConfig, hostTeam);
     this.rooms.set(code, room);
     return room;
   }

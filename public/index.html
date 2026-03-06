@@ -32,8 +32,18 @@
           <label class="radio-label"><input type="radio" name="mode" value="team" /> Team Battle</label>
         </div>
         <div id="host-team-section" class="hidden">
-          <label>Your Team Name
-            <input type="text" id="host-team" placeholder="Team name" maxlength="20" />
+          <label>Number of Teams
+            <input type="number" id="host-num-teams" min="2" max="10" value="2" />
+          </label>
+          <label>Max Players per Team
+            <input type="number" id="host-max-per-team" min="1" max="20" value="4" />
+          </label>
+          <div id="team-names-container">
+            <label>Team Names</label>
+            <div id="team-names-list"></div>
+          </div>
+          <label>Your Team
+            <select id="host-team-select"></select>
           </label>
         </div>
         <button id="btn-create-room" class="btn btn-primary">Create Room</button>
@@ -45,18 +55,26 @@
     <section id="screen-join" class="screen">
       <div class="card">
         <h2>Join a Game</h2>
-        <label>Party Code
-          <input type="text" id="join-code" placeholder="Enter 6-char code" maxlength="6" />
-        </label>
-        <label>Your Name
-          <input type="text" id="join-name" placeholder="Enter your name" maxlength="20" />
-        </label>
-        <div id="join-team-section" class="hidden">
-          <label>Your Team Name
-            <input type="text" id="join-team" placeholder="Team name" maxlength="20" />
+
+        <!-- Step 1: Enter code & name -->
+        <div id="join-step1">
+          <label>Party Code
+            <input type="text" id="join-code" placeholder="Enter 6-char code" maxlength="6" />
           </label>
+          <label>Your Name
+            <input type="text" id="join-name" placeholder="Enter your name" maxlength="20" />
+          </label>
+          <button id="btn-check-room" class="btn btn-primary">Next →</button>
         </div>
-        <button id="btn-join-room" class="btn btn-primary">Join Room</button>
+
+        <!-- Step 2: Pick a team (appears for team mode rooms) -->
+        <div id="join-step2" class="hidden">
+          <p id="join-room-mode-msg"></p>
+          <div id="join-team-picker" class="team-picker"></div>
+          <button id="btn-join-room" class="btn btn-primary">Join Room</button>
+          <button id="btn-join-back-step1" class="btn btn-secondary">← Back</button>
+        </div>
+
         <button class="btn btn-back" data-back="screen-home">← Back</button>
       </div>
     </section>

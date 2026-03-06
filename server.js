@@ -27,8 +27,9 @@ io.on('connection', (socket) => {
   console.log(`Connected: ${socket.id}`);
 
   // ── HOST a new room ───────────────────────────────────────────────
-  socket.on('host-game', ({ hostName, mode, teamName }) => {
-    const room = roomManager.createRoom(socket.id, hostName, mode, teamName);
+  socket.on('host-game', ({ hostName, mode, teamConfig, hostTeam }) => {
+    // teamConfig: [{ name, maxPlayers }]  (team mode only)
+    const room = roomManager.createRoom(socket.id, hostName, mode, teamConfig, hostTeam);
     socket.join(room.code);
     socket.emit('room-created', {
       code: room.code,
@@ -38,15 +39,30 @@ io.on('connection', (socket) => {
     });
   });
 
+  // ── PEEK at room info (before joining, so joiner can pick a team) ─
+  socket.on('get-room-info', ({ code }) => {
+    const room = roomManager.getRoom(code);
+    if (!room) return socket.emit('error-msg', 'Room not found.');
+    if (room.state !== 'lobby') return socket.emit('error-msg', 'Game already in progress.');
+    socket.emit('room-info', {
+      code: room.code,
+      mode: room.mode,
+      availableTeams: room.getAvailableTeams()
+    });
+  });
+
   // ── JOIN an existing room ─────────────────────────────────────────
   socket.on('join-game', ({ code, playerName, teamName }) => {
     const room = roomManager.getRoom(code);
     if (!room) return socket.emit('error-msg', 'Room not found.');
     if (room.state !== 'lobby') return socket.emit('error-msg', 'Game already in progress.');
 
-    // In team mode a team name is required
-    if (room.mode === 'team' && !teamName) {
-      return socket.emit('error-msg', 'Please enter a team name.');
+    // In team mode a valid team selection is required
+    if (room.mode === 'team') {
+      if (!teamName) return socket.emit('error-msg', 'Please select a team.');
+      if (!room.teamConfig.has(teamName)) return socket.emit('error-msg', 'Invalid team selection.');
+      const cfg = room.teamConfig.get(teamName);
+      if (cfg.members.size >= cfg.maxPlayers) return socket.emit('error-msg', 'That team is full.');
     }
 
     const added = room.addPlayer(socket.id, playerName, teamName);

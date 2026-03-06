@@ -79,31 +79,148 @@ $$('input[name="mode"]').forEach(el => {
   el.addEventListener('change', () => {
     const team = el.value === 'team';
     $('#host-team-section').classList.toggle('hidden', !team);
+    if (team) generateTeamNameInputs();
   });
 });
+
+/** Generate dynamic team name inputs + host team selector */
+function generateTeamNameInputs() {
+  const numTeams = parseInt($('#host-num-teams').value) || 2;
+  const list = $('#team-names-list');
+  const sel = $('#host-team-select');
+  list.innerHTML = '';
+  sel.innerHTML = '';
+
+  for (let i = 1; i <= numTeams; i++) {
+    const defaultName = `Team ${i}`;
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'team-name-input';
+    inp.placeholder = defaultName;
+    inp.maxLength = 20;
+    inp.dataset.idx = i;
+    inp.value = defaultName;
+    inp.addEventListener('input', updateHostTeamSelect);
+    list.appendChild(inp);
+  }
+  updateHostTeamSelect();
+}
+
+function updateHostTeamSelect() {
+  const sel = $('#host-team-select');
+  const prev = sel.value;
+  sel.innerHTML = '';
+  $$('.team-name-input').forEach(inp => {
+    const name = inp.value.trim() || inp.placeholder;
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  // Restore previous selection if still present
+  if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+
+$('#host-num-teams').addEventListener('change', generateTeamNameInputs);
 
 $('#btn-create-room').addEventListener('click', () => {
   const name = $('#host-name').value.trim();
   if (!name) return toast('Enter your name.', 'error');
 
   const mode = $('input[name="mode"]:checked').value;
-  const teamName = mode === 'team' ? $('#host-team').value.trim() : null;
-  if (mode === 'team' && !teamName) return toast('Enter a team name.', 'error');
 
-  socket.emit('host-game', { hostName: name, mode, teamName });
+  if (mode === 'team') {
+    const maxPlayers = parseInt($('#host-max-per-team').value) || 4;
+    const teamInputs = $$('.team-name-input');
+    const teamConfig = [];
+    const seen = new Set();
+    for (const inp of teamInputs) {
+      const tName = (inp.value.trim() || inp.placeholder).trim();
+      if (!tName) return toast('All teams need a name.', 'error');
+      if (seen.has(tName.toLowerCase())) return toast(`Duplicate team name: "${tName}".`, 'error');
+      seen.add(tName.toLowerCase());
+      teamConfig.push({ name: tName, maxPlayers });
+    }
+    const hostTeam = $('#host-team-select').value;
+    if (!hostTeam) return toast('Select your team.', 'error');
+    socket.emit('host-game', { hostName: name, mode, teamConfig, hostTeam });
+  } else {
+    socket.emit('host-game', { hostName: name, mode });
+  }
 });
 
 // ══════════════════════════════════════════════════════════
-//  JOIN SCREEN
+//  JOIN SCREEN (two-step flow for team mode)
 // ══════════════════════════════════════════════════════════
-$('#btn-join-room').addEventListener('click', () => {
+let joinSelectedTeam = null;   // team the joining player picked
+let joinRoomMode = 'solo';     // mode of the room being joined
+
+$('#btn-check-room').addEventListener('click', () => {
   const code = $('#join-code').value.trim().toUpperCase();
   const name = $('#join-name').value.trim();
   if (!code || code.length < 4) return toast('Enter a valid party code.', 'error');
   if (!name) return toast('Enter your name.', 'error');
+  socket.emit('get-room-info', { code });
+});
 
-  const teamName = $('#join-team').value.trim() || null;
-  socket.emit('join-game', { code, playerName: name, teamName });
+/** Server responds with room info so we can show team picker */
+socket.on('room-info', (data) => {
+  joinRoomMode = data.mode;
+
+  if (data.mode === 'solo') {
+    // Solo — skip team picker, join directly
+    const code = $('#join-code').value.trim().toUpperCase();
+    const name = $('#join-name').value.trim();
+    socket.emit('join-game', { code, playerName: name, teamName: null });
+  } else {
+    // Team mode — show team picker
+    $('#join-step1').classList.add('hidden');
+    $('#join-step2').classList.remove('hidden');
+    joinSelectedTeam = null;
+
+    const msg = $('#join-room-mode-msg');
+    msg.textContent = 'Pick your team:';
+
+    const picker = $('#join-team-picker');
+    picker.innerHTML = '';
+
+    if (!data.availableTeams || data.availableTeams.length === 0) {
+      picker.innerHTML = '<p style="color:#f44">All teams are full!</p>';
+      $('#btn-join-room').disabled = true;
+      return;
+    }
+
+    $('#btn-join-room').disabled = false;
+
+    data.availableTeams.forEach(t => {
+      const btn = document.createElement('button');
+      btn.className = 'team-pick-btn';
+      btn.innerHTML = `<strong>${t.name}</strong><span class="team-slots">${t.currentCount} / ${t.maxPlayers}</span>`;
+      btn.addEventListener('click', () => {
+        $$('.team-pick-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        joinSelectedTeam = t.name;
+      });
+      picker.appendChild(btn);
+    });
+  }
+});
+
+$('#btn-join-back-step1').addEventListener('click', () => {
+  $('#join-step1').classList.remove('hidden');
+  $('#join-step2').classList.add('hidden');
+});
+
+$('#btn-join-room').addEventListener('click', () => {
+  const code = $('#join-code').value.trim().toUpperCase();
+  const name = $('#join-name').value.trim();
+  if (!code || !name) return toast('Missing code or name.', 'error');
+
+  if (joinRoomMode === 'team' && !joinSelectedTeam) {
+    return toast('Select a team first.', 'error');
+  }
+
+  socket.emit('join-game', { code, playerName: name, teamName: joinSelectedTeam });
 });
 
 // ══════════════════════════════════════════════════════════
@@ -120,11 +237,6 @@ function renderLobby(code, players, mode, teams) {
   const badge = $('#lobby-mode-badge');
   badge.textContent = mode === 'team' ? 'Team Battle' : 'Solo';
   badge.className = `mode-badge ${mode}`;
-
-  // Show team name field for join if team mode
-  if (mode === 'team') {
-    $('#join-team-section').classList.remove('hidden');
-  }
 
   // Player list
   renderPlayerList(players);
@@ -162,10 +274,13 @@ function renderTeamList(mode, teams) {
   const tl = $('#lobby-teams');
   tl.innerHTML = '';
   if (mode === 'team' && teams) {
-    Object.entries(teams).forEach(([team, members]) => {
+    Object.entries(teams).forEach(([team, info]) => {
       const block = document.createElement('div');
       block.className = 'team-block';
-      block.innerHTML = `<h4>${team}</h4>${members.map(m => `<span class="player-chip">${m}</span>`).join('')}`;
+      block.innerHTML = `
+        <h4>${team} <span class="team-capacity">(${info.count} / ${info.maxPlayers})</span></h4>
+        ${info.members.map(m => `<span class="player-chip">${m}</span>`).join('') || '<span class="empty-team">No members yet</span>'}
+      `;
       tl.appendChild(block);
     });
   }
