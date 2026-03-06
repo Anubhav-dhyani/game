@@ -400,6 +400,73 @@ $('#btn-skip').addEventListener('click', () => {
   socket.emit('skip-turn', { code: roomCode });
 });
 
+// ── Speech-to-Text (Mic) ──────────────────────────────────
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let isListening = false;
+
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.continuous = false;
+
+  recognition.addEventListener('result', (e) => {
+    const spoken = e.results[0][0].transcript.trim().toLowerCase();
+    // Take only the first word (strip extra words)
+    const firstWord = spoken.split(/\s+/)[0].replace(/[^a-z'-]/g, '');
+    if (firstWord) {
+      $('#word-input').value = firstWord;
+      setMicStatus(`Heard: "${firstWord}"`, 'success');
+    } else {
+      setMicStatus('Could not understand, try again.', 'error');
+    }
+    stopListening();
+  });
+
+  recognition.addEventListener('error', (e) => {
+    if (e.error === 'no-speech') {
+      setMicStatus('No speech detected. Try again.', 'error');
+    } else if (e.error === 'not-allowed') {
+      setMicStatus('Microphone access denied.', 'error');
+    } else {
+      setMicStatus(`Mic error: ${e.error}`, 'error');
+    }
+    stopListening();
+  });
+
+  recognition.addEventListener('end', () => {
+    stopListening();
+  });
+}
+
+function startListening() {
+  if (!recognition) return toast('Speech recognition not supported in this browser.', 'error');
+  if (isListening) { stopListening(); return; }
+  isListening = true;
+  $('#btn-mic').classList.add('listening');
+  setMicStatus('Listening… speak now', 'info');
+  try { recognition.start(); } catch(e) { /* already started */ }
+}
+
+function stopListening() {
+  isListening = false;
+  $('#btn-mic').classList.remove('listening');
+  try { recognition.stop(); } catch(e) { /* not started */ }
+}
+
+function setMicStatus(msg, type) {
+  const el = $('#mic-status');
+  el.textContent = msg;
+  el.className = `mic-status ${type}`;
+  el.classList.remove('hidden');
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+$('#btn-mic').addEventListener('click', startListening);
+
 function addFeedItem(data) {
   const feed = $('#game-feed');
   const item = document.createElement('div');

@@ -131,9 +131,13 @@
 
         <div id="my-turn-controls" class="hidden">
           <div class="timer-bar"><div id="timer-fill" class="timer-fill"></div></div>
-          <label>Type a word for <strong id="input-category">-</strong>:
-            <input type="text" id="word-input" placeholder="Type a word…" maxlength="60" autocomplete="off" />
+          <label>Type or speak a word for <strong id="input-category">-</strong>:
+            <div class="input-mic-row">
+              <input type="text" id="word-input" placeholder="Type a word…" maxlength="60" autocomplete="off" />
+              <button id="btn-mic" class="btn btn-mic" title="Speak a word">🎤</button>
+            </div>
           </label>
+          <div id="mic-status" class="mic-status hidden"></div>
           <div class="btn-row">
             <button id="btn-submit-word" class="btn btn-primary">Submit</button>
             <button id="btn-skip" class="btn btn-secondary">Skip</button>

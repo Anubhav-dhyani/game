@@ -96,6 +96,50 @@ body {
 .btn-row { display: flex; gap: 10px; }
 .btn-row .btn { flex: 1; }
 
+/* ── Mic input row ──────────────────────────────────────── */
+.input-mic-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.input-mic-row input {
+  flex: 1;
+}
+.btn-mic {
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  font-size: 1.3rem;
+  border-radius: 50%;
+  border: 2px solid #333;
+  background: var(--secondary);
+  color: var(--text);
+  cursor: pointer;
+  transition: background .2s, border-color .2s, box-shadow .2s;
+  flex-shrink: 0;
+}
+.btn-mic:hover {
+  border-color: var(--primary);
+}
+.btn-mic.listening {
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, .2);
+  box-shadow: 0 0 0 4px rgba(233, 69, 96, .25);
+  animation: micPulse 1s ease-in-out infinite;
+}
+@keyframes micPulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(233, 69, 96, .25); }
+  50%      { box-shadow: 0 0 0 8px rgba(233, 69, 96, .1); }
+}
+.mic-status {
+  font-size: .85rem;
+  padding: 4px 0;
+  margin-top: -4px;
+}
+.mic-status.info    { color: var(--primary); }
+.mic-status.success { color: var(--success); }
+.mic-status.error   { color: var(--accent); }
+
 /* ── Form ───────────────────────────────────────────────── */
 label {
   display: block;
