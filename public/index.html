@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Word Party 🎉</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- ═══════════════ HOME SCREEN ═══════════════ -->
+    <section id="screen-home" class="screen active">
+      <div class="card home-card">
+        <h1>🎉 Word Party</h1>
+        <p class="subtitle">The multiplayer word challenge game</p>
+        <button id="btn-host" class="btn btn-primary">Host a Game</button>
+        <button id="btn-join" class="btn btn-secondary">Join a Game</button>
+      </div>
+    </section>
+
+    <!-- ═══════════════ HOST SETUP ═══════════════ -->
+    <section id="screen-host" class="screen">
+      <div class="card">
+        <h2>Host a New Game</h2>
+        <label>Your Name
+          <input type="text" id="host-name" placeholder="Enter your name" maxlength="20" />
+        </label>
+        <label>Game Mode</label>
+        <div class="radio-group">
+          <label class="radio-label"><input type="radio" name="mode" value="solo" checked /> Solo (Individual)</label>
+          <label class="radio-label"><input type="radio" name="mode" value="team" /> Team Battle</label>
+        </div>
+        <div id="host-team-section" class="hidden">
+          <label>Your Team Name
+            <input type="text" id="host-team" placeholder="Team name" maxlength="20" />
+          </label>
+        </div>
+        <button id="btn-create-room" class="btn btn-primary">Create Room</button>
+        <button class="btn btn-back" data-back="screen-home">← Back</button>
+      </div>
+    </section>
+
+    <!-- ═══════════════ JOIN SCREEN ═══════════════ -->
+    <section id="screen-join" class="screen">
+      <div class="card">
+        <h2>Join a Game</h2>
+        <label>Party Code
+          <input type="text" id="join-code" placeholder="Enter 6-char code" maxlength="6" />
+        </label>
+        <label>Your Name
+          <input type="text" id="join-name" placeholder="Enter your name" maxlength="20" />
+        </label>
+        <div id="join-team-section" class="hidden">
+          <label>Your Team Name
+            <input type="text" id="join-team" placeholder="Team name" maxlength="20" />
+          </label>
+        </div>
+        <button id="btn-join-room" class="btn btn-primary">Join Room</button>
+        <button class="btn btn-back" data-back="screen-home">← Back</button>
+      </div>
+    </section>
+
+    <!-- ═══════════════ LOBBY ═══════════════ -->
+    <section id="screen-lobby" class="screen">
+      <div class="card lobby-card">
+        <h2>Lobby</h2>
+        <div class="code-display">
+          <span>Party Code:</span>
+          <span id="lobby-code" class="code-text">------</span>
+          <button id="btn-copy-code" class="btn btn-small" title="Copy code">📋</button>
+        </div>
+        <div class="mode-badge" id="lobby-mode-badge">Solo</div>
+
+        <div id="lobby-players" class="player-list"></div>
+        <div id="lobby-teams" class="team-list"></div>
+
+        <!-- Host-only: category picker & start button -->
+        <div id="host-controls" class="hidden">
+          <h3>Select Categories (pick at least 1)</h3>
+          <div id="category-picker" class="category-grid"></div>
+
+          <label>Rounds per player
+            <select id="round-select">
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5" selected>5</option>
+              <option value="7">7</option>
+              <option value="10">10</option>
+            </select>
+          </label>
+
+          <button id="btn-start-game" class="btn btn-primary">Start Game</button>
+        </div>
+
+        <div id="waiting-msg" class="hidden">
+          <p>⏳ Waiting for the host to start the game…</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ GAME SCREEN ═══════════════ -->
+    <section id="screen-game" class="screen">
+      <div class="card game-card">
+        <div class="game-header">
+          <div class="round-info">Round <span id="game-round">1</span> / <span id="game-total-rounds">5</span></div>
+          <div class="category-badge">Category: <strong id="game-category">-</strong></div>
+        </div>
+
+        <div id="turn-info" class="turn-info">
+          <p>It's <strong id="turn-player">-</strong>'s turn</p>
+        </div>
+
+        <div id="my-turn-controls" class="hidden">
+          <div class="timer-bar"><div id="timer-fill" class="timer-fill"></div></div>
+          <label>Type a word for <strong id="input-category">-</strong>:
+            <input type="text" id="word-input" placeholder="Type a word…" maxlength="60" autocomplete="off" />
+          </label>
+          <div class="btn-row">
+            <button id="btn-submit-word" class="btn btn-primary">Submit</button>
+            <button id="btn-skip" class="btn btn-secondary">Skip</button>
+          </div>
+        </div>
+
+        <div id="game-feed" class="game-feed"></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ GAME OVER / LEADERBOARD ═══════════════ -->
+    <section id="screen-gameover" class="screen">
+      <div class="card">
+        <h2>🏆 Game Over!</h2>
+        <div id="leaderboard"></div>
+        <button id="btn-play-again" class="btn btn-primary">Play Again</button>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast-container"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

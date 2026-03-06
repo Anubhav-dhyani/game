@@ -1,0 +1,415 @@
+/* ═══════════════════════════════════════════════════════════
+   Word Party – Client  (dynamic categories from dataset)
+   ═══════════════════════════════════════════════════════════ */
+
+const socket = io();
+
+// ── State ─────────────────────────────────────────────────
+let myId = null;
+let roomCode = null;
+let isHost = false;
+let gameMode = 'solo';
+let timerInterval = null;
+const TURN_TIME = 20; // seconds per turn
+
+// Categories fetched from server (loaded from dataset)
+let ALL_CATEGORIES = [];           // [{ key, label, count }]
+let selectedCategories = new Set();
+
+// ── DOM refs ──────────────────────────────────────────────
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+// Screens
+const screens = {
+  home:     $('#screen-home'),
+  host:     $('#screen-host'),
+  join:     $('#screen-join'),
+  lobby:    $('#screen-lobby'),
+  game:     $('#screen-game'),
+  gameover: $('#screen-gameover'),
+};
+
+function showScreen(name) {
+  Object.values(screens).forEach(s => s.classList.remove('active'));
+  screens[name].classList.add('active');
+}
+
+// ── Toasts ────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  $('#toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3100);
+}
+
+// ── Fetch categories from server at startup ───────────────
+async function loadCategories() {
+  try {
+    const res = await fetch('/api/categories');
+    ALL_CATEGORIES = await res.json();
+    // Default-select a few popular ones
+    const defaults = ['fruits', 'countries', 'animals', 'cities', 'colors'];
+    ALL_CATEGORIES.forEach(c => {
+      if (defaults.includes(c.key)) selectedCategories.add(c.key);
+    });
+  } catch (e) {
+    console.error('Failed to load categories', e);
+    toast('Failed to load categories from server.', 'error');
+  }
+}
+loadCategories();
+
+// ══════════════════════════════════════════════════════════
+//  HOME SCREEN
+// ══════════════════════════════════════════════════════════
+$('#btn-host').addEventListener('click', () => showScreen('host'));
+$('#btn-join').addEventListener('click', () => showScreen('join'));
+
+// Back buttons
+$$('.btn-back').forEach(btn => {
+  btn.addEventListener('click', () => showScreen(btn.dataset.back));
+});
+
+// ══════════════════════════════════════════════════════════
+//  HOST SETUP
+// ══════════════════════════════════════════════════════════
+$$('input[name="mode"]').forEach(el => {
+  el.addEventListener('change', () => {
+    const team = el.value === 'team';
+    $('#host-team-section').classList.toggle('hidden', !team);
+  });
+});
+
+$('#btn-create-room').addEventListener('click', () => {
+  const name = $('#host-name').value.trim();
+  if (!name) return toast('Enter your name.', 'error');
+
+  const mode = $('input[name="mode"]:checked').value;
+  const teamName = mode === 'team' ? $('#host-team').value.trim() : null;
+  if (mode === 'team' && !teamName) return toast('Enter a team name.', 'error');
+
+  socket.emit('host-game', { hostName: name, mode, teamName });
+});
+
+// ══════════════════════════════════════════════════════════
+//  JOIN SCREEN
+// ══════════════════════════════════════════════════════════
+$('#btn-join-room').addEventListener('click', () => {
+  const code = $('#join-code').value.trim().toUpperCase();
+  const name = $('#join-name').value.trim();
+  if (!code || code.length < 4) return toast('Enter a valid party code.', 'error');
+  if (!name) return toast('Enter your name.', 'error');
+
+  const teamName = $('#join-team').value.trim() || null;
+  socket.emit('join-game', { code, playerName: name, teamName });
+});
+
+// ══════════════════════════════════════════════════════════
+//  LOBBY
+// ══════════════════════════════════════════════════════════
+
+function renderLobby(code, players, mode, teams) {
+  roomCode = code;
+  gameMode = mode;
+  isHost = players.some(p => p.id === socket.id && p.isHost);
+
+  $('#lobby-code').textContent = code;
+
+  const badge = $('#lobby-mode-badge');
+  badge.textContent = mode === 'team' ? 'Team Battle' : 'Solo';
+  badge.className = `mode-badge ${mode}`;
+
+  // Show team name field for join if team mode
+  if (mode === 'team') {
+    $('#join-team-section').classList.remove('hidden');
+  }
+
+  // Player list
+  renderPlayerList(players);
+
+  // Team list
+  renderTeamList(mode, teams);
+
+  // Host controls
+  if (isHost) {
+    $('#host-controls').classList.remove('hidden');
+    $('#waiting-msg').classList.add('hidden');
+    renderCategoryPicker();
+  } else {
+    $('#host-controls').classList.add('hidden');
+    $('#waiting-msg').classList.remove('hidden');
+  }
+
+  showScreen('lobby');
+}
+
+function renderPlayerList(players) {
+  const pl = $('#lobby-players');
+  pl.innerHTML = '';
+  if (gameMode !== 'team') {
+    players.forEach(p => {
+      const chip = document.createElement('span');
+      chip.className = 'player-chip';
+      chip.innerHTML = `${p.isHost ? '<span class="host-star">★</span>' : ''}${p.name}`;
+      pl.appendChild(chip);
+    });
+  }
+}
+
+function renderTeamList(mode, teams) {
+  const tl = $('#lobby-teams');
+  tl.innerHTML = '';
+  if (mode === 'team' && teams) {
+    Object.entries(teams).forEach(([team, members]) => {
+      const block = document.createElement('div');
+      block.className = 'team-block';
+      block.innerHTML = `<h4>${team}</h4>${members.map(m => `<span class="player-chip">${m}</span>`).join('')}`;
+      tl.appendChild(block);
+    });
+  }
+}
+
+function renderCategoryPicker() {
+  const grid = $('#category-picker');
+  grid.innerHTML = '';
+
+  if (ALL_CATEGORIES.length === 0) {
+    grid.innerHTML = '<p style="color:#888">Loading categories…</p>';
+    setTimeout(renderCategoryPicker, 500);
+    return;
+  }
+
+  ALL_CATEGORIES.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = `cat-btn${selectedCategories.has(cat.key) ? ' selected' : ''}`;
+    btn.innerHTML = `${cat.label}<span class="cat-count">${cat.count}</span>`;
+    btn.addEventListener('click', () => {
+      if (selectedCategories.has(cat.key)) {
+        selectedCategories.delete(cat.key);
+        btn.classList.remove('selected');
+      } else {
+        selectedCategories.add(cat.key);
+        btn.classList.add('selected');
+      }
+    });
+    grid.appendChild(btn);
+  });
+}
+
+$('#btn-copy-code').addEventListener('click', () => {
+  navigator.clipboard.writeText(roomCode).then(() => toast('Code copied!', 'success'));
+});
+
+$('#btn-start-game').addEventListener('click', () => {
+  if (selectedCategories.size === 0) return toast('Select at least one category.', 'error');
+  const rounds = parseInt($('#round-select').value);
+  socket.emit('start-game', { code: roomCode, categories: [...selectedCategories], rounds });
+});
+
+// ══════════════════════════════════════════════════════════
+//  GAME SCREEN
+// ══════════════════════════════════════════════════════════
+
+/** Find the display label for a category key */
+function catLabel(key) {
+  const found = ALL_CATEGORIES.find(c => c.key === key);
+  return found ? found.label : key;
+}
+
+function startTurn(turn) {
+  $('#game-round').textContent = turn.round;
+  $('#game-category').textContent = catLabel(turn.category);
+  $('#turn-player').textContent = turn.playerName;
+  $('#word-input').value = '';
+
+  const isMyTurn = turn.playerId === socket.id;
+  $('#my-turn-controls').classList.toggle('hidden', !isMyTurn);
+  $('#input-category').textContent = catLabel(turn.category);
+
+  // Store raw category key for submit
+  $('#word-input').dataset.category = turn.category;
+
+  if (isMyTurn) {
+    $('#word-input').focus();
+    startTimer();
+  } else {
+    clearTimer();
+  }
+}
+
+function startTimer() {
+  clearTimer();
+  let remaining = TURN_TIME;
+  const fill = $('#timer-fill');
+  fill.style.width = '100%';
+  fill.className = 'timer-fill';
+
+  timerInterval = setInterval(() => {
+    remaining -= 0.1;
+    const pct = (remaining / TURN_TIME) * 100;
+    fill.style.width = pct + '%';
+
+    if (pct < 25) fill.className = 'timer-fill danger';
+    else if (pct < 50) fill.className = 'timer-fill warning';
+
+    if (remaining <= 0) {
+      clearTimer();
+      socket.emit('skip-turn', { code: roomCode });
+    }
+  }, 100);
+}
+
+function clearTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
+}
+
+$('#btn-submit-word').addEventListener('click', submitWord);
+$('#word-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitWord();
+});
+
+function submitWord() {
+  const word = $('#word-input').value.trim();
+  if (!word) return toast('Type a word!', 'error');
+  const category = $('#word-input').dataset.category; // raw key
+  clearTimer();
+  socket.emit('submit-word', { code: roomCode, word, category });
+  $('#word-input').value = '';
+}
+
+$('#btn-skip').addEventListener('click', () => {
+  clearTimer();
+  socket.emit('skip-turn', { code: roomCode });
+});
+
+function addFeedItem(data) {
+  const feed = $('#game-feed');
+  const item = document.createElement('div');
+  item.className = `feed-item ${data.valid ? 'valid' : 'invalid'}`;
+  const teamTag = data.team ? ` [${data.team}]` : '';
+  const label = catLabel(data.category);
+  item.innerHTML = `
+    <strong>${data.player}${teamTag}</strong>: "${data.word}" 
+    <em>(${label})</em>
+    ${data.valid ? '✅' : '❌ ' + data.reason}
+    <span class="pts">${data.valid ? '+' + data.points : '0'}</span>
+  `;
+  feed.prepend(item);
+}
+
+// ══════════════════════════════════════════════════════════
+//  GAME OVER / LEADERBOARD
+// ══════════════════════════════════════════════════════════
+function renderLeaderboard(leaderboard, mode) {
+  const lb = $('#leaderboard');
+  lb.innerHTML = '';
+
+  leaderboard.forEach(entry => {
+    const row = document.createElement('div');
+    row.className = 'lb-row';
+
+    const rankClass = entry.rank === 1 ? 'gold' : entry.rank === 2 ? 'silver' : entry.rank === 3 ? 'bronze' : '';
+
+    if (mode === 'team') {
+      row.innerHTML = `
+        <span class="lb-rank ${rankClass}">#${entry.rank}</span>
+        <span class="lb-name">${entry.name}<br><span class="lb-members">${entry.members.map(m => m.name).join(', ')}</span></span>
+        <span class="lb-score">${entry.score} pts</span>
+      `;
+    } else {
+      row.innerHTML = `
+        <span class="lb-rank ${rankClass}">#${entry.rank}</span>
+        <span class="lb-name">${entry.name}</span>
+        <span class="lb-score">${entry.score} pts</span>
+      `;
+    }
+    lb.appendChild(row);
+  });
+}
+
+$('#btn-play-again').addEventListener('click', () => {
+  roomCode = null;
+  isHost = false;
+  // Reset default selections
+  selectedCategories = new Set();
+  const defaults = ['fruits', 'countries', 'animals', 'cities', 'colors'];
+  ALL_CATEGORIES.forEach(c => {
+    if (defaults.includes(c.key)) selectedCategories.add(c.key);
+  });
+  clearTimer();
+  showScreen('home');
+});
+
+// ══════════════════════════════════════════════════════════
+//  SOCKET EVENTS
+// ══════════════════════════════════════════════════════════
+socket.on('connect', () => { myId = socket.id; });
+
+socket.on('room-created', (data) => {
+  renderLobby(data.code, data.players, data.mode, data.teams);
+  toast(`Room ${data.code} created!`, 'success');
+});
+
+socket.on('joined-room', (data) => {
+  renderLobby(data.code, data.players, data.mode, data.teams);
+  toast('Joined the room!', 'success');
+});
+
+socket.on('player-joined', (data) => {
+  renderPlayerList(data.players);
+  renderTeamList(gameMode, data.teams);
+  toast('A new player joined!', 'info');
+});
+
+socket.on('player-left', (data) => {
+  renderPlayerList(data.players);
+  renderTeamList(gameMode, data.teams);
+  toast('A player left.', 'info');
+});
+
+socket.on('host-changed', ({ newHostId }) => {
+  isHost = newHostId === socket.id;
+  if (isHost) {
+    toast("You're the host now!", 'info');
+    $('#host-controls').classList.remove('hidden');
+    $('#waiting-msg').classList.add('hidden');
+    renderCategoryPicker();
+  }
+});
+
+socket.on('game-started', (data) => {
+  $('#game-total-rounds').textContent = data.rounds;
+  $('#game-feed').innerHTML = '';
+  clearTimer();
+  showScreen('game');
+  startTurn(data.turn);
+  toast('Game started! 🎮', 'success');
+});
+
+socket.on('word-result', (data) => {
+  addFeedItem(data);
+});
+
+socket.on('next-turn', (data) => {
+  $('#game-round').textContent = data.currentRound;
+  startTurn(data.turn);
+});
+
+socket.on('game-over', (data) => {
+  clearTimer();
+  renderLeaderboard(data.leaderboard, data.mode);
+  showScreen('gameover');
+  toast('Game over! 🏆', 'success');
+});
+
+socket.on('room-closed', () => {
+  toast('Room has been closed.', 'info');
+  showScreen('home');
+});
+
+socket.on('error-msg', (msg) => {
+  toast(msg, 'error');
+});
